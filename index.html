@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مولد أيقونات لوسيد</title>
+    <!-- Tailwind CSS للتصميم -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons المكتوبة بالنسخة الخاصة بالمتصفح -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- مكتبة JSZip لضغط الملفات وتحميلها دفعة واحدة -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- مكتبة FileSaver لحفظ الملف المضغوط -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="bg-slate-800 p-6 rounded-2xl shadow-xl w-full max-w-md text-center">
+        <h1 class="text-2xl font-bold mb-2">مولد أيقونات Lucide</h1>
+        <p class="text-slate-400 text-sm mb-6">اكتب اسم أيقونة (مثال: <span class="text-cyan-400">heart</span>, <span class="text-cyan-400">camera</span>, <span class="text-cyan-400">settings</span>)</p>
+
+        <!-- حقل الإدخال -->
+        <div class="mb-4">
+            <input type="text" id="iconNameInput" placeholder="اكتب اسم الأيقونة بالإنجليزية..." 
+                class="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:outline-none focus:border-cyan-500 text-center text-lg text-white placeholder-slate-400">
+        </div>
+
+        <button onclick="renderIcon()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-3 rounded-xl transition shadow-lg mb-4">
+            عرض الأيقونة
+        </button>
+
+        <!-- زر استعراض جميع الأيقونات -->
+        <button onclick="openGalleryModal()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-xl transition shadow-lg mb-4 flex items-center justify-center gap-2">
+            <span>👁️ عرض جميع الأيقونات</span>
+        </button>
+
+        <!-- زر نسخ أسماء الأيقونات تحت بعض -->
+        <button onclick="copyAllNames()" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2.5 rounded-xl transition shadow-lg mb-6 flex items-center justify-center gap-2">
+            <span>📋 نسخ جميع أسماء الأيقونات</span>
+        </button>
+
+        <!-- منطقة عرض الأيقونة -->
+        <div class="flex flex-col items-center justify-center mb-6">
+            <div id="iconContainer" class="bg-slate-900 p-8 rounded-2xl border border-slate-700 shadow-inner inline-flex items-center justify-center min-w-[120px] min-h-[120px]">
+                <i data-lucide="help-circle" class="w-16 h-16 text-cyan-400"></i>
+            </div>
+            <span id="errorMsg" class="text-red-400 text-sm mt-2 hidden">هذه الأيقونة غير موجودة أو الاسم غير صحيح!</span>
+        </div>
+
+        <!-- زر الحفظ الفردي -->
+        <button onclick="downloadIcon()" id="downloadBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl transition shadow-lg hidden mb-4">
+            حفظ الأيقونة PNG (لروبلوكس)
+        </button>
+
+        <hr class="border-slate-700 my-4">
+
+        <!-- زر تحميل جميع الأيقونات مع الحجم التقديري -->
+        <div class="text-right">
+            <button onclick="confirmDownloadAll()" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-semibold py-3 rounded-xl transition shadow-lg flex flex-col items-center justify-center">
+                <span>حفظ جميع أيقونات لوسيد PNG (الكل)</span>
+                <span id="allIconsCounter" class="text-xs text-rose-200 mt-1">جاري حساب العدد الحجم... (+1500 أيقونة)</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- نافذة معرض الأيقونات -->
+    <div id="galleryModal" class="fixed inset-0 bg-black/90 flex flex-col p-4 hidden z-50">
+        <div class="bg-slate-800 p-4 rounded-xl flex justify-between items-center mb-4 border border-slate-700">
+            <h3 class="text-lg font-bold text-cyan-400">جميع الأيقونات المتاحة (<span id="galleryCount">0</span>)</h3>
+            <button onclick="closeGalleryModal()" class="bg-red-600 hover:bg-red-500 px-4 py-1.5 rounded-lg text-sm font-semibold transition">إغلاق</button>
+        </div>
+        <div class="mb-4">
+            <input type="text" id="gallerySearch" oninput="filterGallery()" placeholder="ابحث في الأيقونات..." class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-xl text-white placeholder-slate-400">
+        </div>
+        <div id="galleryGrid" class="flex-1 overflow-y-auto grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3 p-2">
+            <!-- يتم تعبئتها ديناميكياً -->
+        </div>
+    </div>
+
+    <!-- نافذة التحذير المنبثقة -->
+    <div id="warningModal" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-slate-800 border border-rose-500/50 p-6 rounded-2xl max-w-sm text-center shadow-2xl">
+            <div class="text-rose-500 text-4xl mb-3">⚠️</div>
+            <h3 class="text-xl font-bold text-rose-400 mb-2">تنبيه هام جداً!</h3>
+            <p class="text-slate-300 text-sm mb-6 leading-relaxed">
+                أنت على وشك حفظ جميع الأيقونات بصيغة PNG (<span id="modalCountText" class="font-bold text-white">أكثر من 1500 أيقونة</span>) بحجم تقديري يقارب <span id="modalSizeText" class="font-bold text-cyan-400">~25 ميجابايت</span>. 
+                <br><br>
+                إذا تم حفظ الايقونات يمكن أن يكون في بطء بل الهاتف وتهنيق حاد في المتصفح أو النظام بسبب ضغط الذاكرة. هل أنت متأكد تماماً من رغبتك في المتابعة؟
+            </p>
+            <div class="flex gap-3">
+                <button onclick="closeWarningModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 py-2.5 rounded-xl text-sm font-semibold transition">
+                    إلغاء (تراجع)
+                </button>
+                <button onclick="startDownloadAllIcons()" class="flex-1 bg-rose-600 hover:bg-rose-500 py-2.5 rounded-xl text-sm font-semibold transition">
+                    نعم، أنا متحمل المسؤولية!
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة التقدم (التحميل) -->
+    <div id="progressModal" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl max-w-sm text-center shadow-2xl">
+            <h3 class="text-lg font-bold text-white mb-2">جاري تجهيز وضغط صور PNG...</h3>
+            <p id="progressText" class="text-cyan-400 text-sm mb-4">يرجى الانتظار وعدم إغلاق الصفحة</p>
+            <div class="w-full bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                <div id="progressBar" class="bg-cyan-500 h-2.5 w-0 transition-all duration-300"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allLucideIcons = [];
+        let estimatedSizeMB = 0;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            if (window.lucide && window.lucide.icons) {
+                allLucideIcons = Object.keys(window.lucide.icons);
+            } else {
+                allLucideIcons = ['home', 'user', 'settings', 'search', 'heart', 'bell', 'camera', 'trash', 'edit', 'share', 'lock', 'unlock', 'shield', 'star', 'check', 'x', 'info', 'help-circle'];
+            }
+            
+            // حساب حجم تقديري تقريبي (كل صورة PNG شفافة بحجم 512x512 تأخذ تقريباً 15 إلى 20 كيلوبايت بعد الضغط)
+            estimatedSizeMB = ((allLucideIcons.length * 18) / 1024).toFixed(1);
+            
+            document.getElementById('allIconsCounter').innerText = `العدد: ${allLucideIcons.length} أيقونة | الحجم التقريبي: ~${estimatedSizeMB} ميجابايت`;
+        });
+
+        function renderIcon() {
+            const inputVal = document.getElementById('iconNameInput').value.trim().toLowerCase();
+            const container = document.getElementById('iconContainer');
+            const errorMsg = document.getElementById('errorMsg');
+            const downloadBtn = document.getElementById('downloadBtn');
+
+            if (!inputVal) return;
+
+            container.innerHTML = `<i data-lucide="${inputVal}" class="w-16 h-16 text-cyan-400"></i>`;
+            
+            try {
+                lucide.createIcons();
+                const iconElement = container.querySelector('svg');
+                if (iconElement) {
+                    errorMsg.classList.add('hidden');
+                    downloadBtn.classList.remove('hidden');
+                } else {
+                    throw new Error('Icon not found');
+                }
+            } catch (e) {
+                errorMsg.classList.remove('hidden');
+                downloadBtn.classList.add('hidden');
+                container.innerHTML = `<i data-lucide="alert-triangle" class="w-16 h-16 text-red-500"></i>`;
+                lucide.createIcons();
+            }
+        }
+
+        function copyAllNames() {
+            const textToCopy = allLucideIcons.join('\n');
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                alert("✅ تم نسخ جميع أسماء الأيقونات بنجاح (تحت بعضها)!");
+            }).catch(err => {
+                alert("❌ حدث خطأ أثناء النسخ.");
+            });
+        }
+
+        function openGalleryModal() {
+            const modal = document.getElementById('galleryModal');
+            const grid = document.getElementById('galleryGrid');
+            document.getElementById('galleryCount').innerText = allLucideIcons.length;
+            
+            grid.innerHTML = '';
+            allLucideIcons.forEach(iconName => {
+                const card = document.createElement('div');
+                card.className = "bg-slate-900 border border-slate-700 p-3 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-cyan-500 transition";
+                card.onclick = () => {
+                    document.getElementById('iconNameInput').value = iconName;
+                    renderIcon();
+                    closeGalleryModal();
+                };
+                card.innerHTML = `
+                    <i data-lucide="${iconName}" class="w-8 h-8 text-cyan-400 mb-2"></i>
+                    <span class="text-xs text-slate-300 truncate w-full text-center">${iconName}</span>
+                `;
+                grid.appendChild(card);
+            });
+
+            lucide.createIcons({ root: grid });
+            modal.classList.remove('hidden');
+        }
+
+        function closeGalleryModal() {
+            document.getElementById('galleryModal').classList.add('hidden');
+        }
+
+        function filterGallery() {
+            const query = document.getElementById('gallerySearch').value.toLowerCase();
+            const cards = document.getElementById('galleryGrid').children;
+            for (let card of cards) {
+                const name = card.querySelector('span').innerText;
+                if (name.includes(query)) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
+                }
+            }
+        }
+
+        async function createPngBlobForIcon(iconName) {
+            return new Promise((resolve) => {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = `<i data-lucide="${iconName}"></i>`;
+                document.body.appendChild(tempDiv);
+                lucide.createIcons({ root: tempDiv });
+
+                const svgEl = tempDiv.querySelector('svg');
+                if (!svgEl) {
+                    document.body.removeChild(tempDiv);
+                    resolve(null);
+                    return;
+                }
+
+                svgEl.setAttribute('width', '512');
+                svgEl.setAttribute('height', '512');
+                
+                const paths = svgEl.querySelectorAll('*');
+                paths.forEach(el => {
+                    el.setAttribute('stroke', '#22d3ee');
+                    if (el.getAttribute('fill') && el.getAttribute('fill') !== 'none') {
+                        el.setAttribute('fill', '#22d3ee');
+                    }
+                });
+
+                const serializer = new XMLSerializer();
+                const svgString = serializer.serializeToString(svgEl);
+                document.body.removeChild(tempDiv);
+
+                const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                const URL = window.URL || window.webkitURL || window;
+                const blobURL = URL.createObjectURL(blob);
+
+                const image = new Image();
+                image.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 512;
+                    canvas.height = 512;
+                    const context = canvas.getContext('2d');
+                    context.clearRect(0, 0, 512, 512);
+                    context.drawImage(image, 0, 0);
+
+                    URL.revokeObjectURL(blobURL);
+                    canvas.toBlob((pngBlob) => {
+                        resolve(pngBlob);
+                    }, 'image/png');
+                };
+                image.onerror = () => {
+                    URL.revokeObjectURL(blobURL);
+                    resolve(null);
+                };
+                image.src = blobURL;
+            });
+        }
+
+        async function downloadIcon() {
+            const inputVal = document.getElementById('iconNameInput').value.trim().toLowerCase() || 'lucide-icon';
+            const pngBlob = await createPngBlobForIcon(inputVal);
+
+            if (!pngBlob) {
+                alert("عذراً، حدث خطأ في تحويل الأيقونة.");
+                return;
+            }
+
+            saveAs(pngBlob, `${inputVal}-icon.png`);
+        }
+
+        function confirmDownloadAll() {
+            document.getElementById('modalCountText').innerText = `(${allLucideIcons.length} أيقونة)`;
+            document.getElementById('modalSizeText').innerText = `~${estimatedSizeMB} ميجابايت`;
+            document.getElementById('warningModal').classList.remove('hidden');
+        }
+
+        function closeWarningModal() {
+            document.getElementById('warningModal').classList.add('hidden');
+        }
+
+        async function startDownloadAllIcons() {
+            document.getElementById('warningModal').classList.add('hidden');
+            document.getElementById('progressModal').classList.remove('hidden');
+
+            const zip = new JSZip();
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const total = allLucideIcons.length;
+
+            for (let i = 0; i < total; i++) {
+                const iconName = allLucideIcons[i];
+                const pngBlob = await createPngBlobForIcon(iconName);
+                if (pngBlob) {
+                    zip.file(`${iconName}.png`, pngBlob);
+                }
+
+                const percent = Math.round(((i + 1) / total) * 100);
+                progressBar.style.width = percent + '%';
+                progressText.innerText = `جاري المعالجة: ${i + 1} من ${total} (${percent}%)`;
+
+                if (i % 20 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+            }
+
+            progressText.innerText = "جاري إنشاء ملف الضغط (ZIP)...";
+            try {
+                const content = await zip.generateAsync({ type: "blob" });
+                saveAs(content, "lucide-png-icons-all.zip");
+            } catch (err) {
+                alert("حدث خطأ أثناء ضغط الملفات.");
+            } finally {
+                document.getElementById('progressModal').classList.add('hidden');
+                progressBar.style.width = '0%';
+            }
+        }
+    </script>
+</body>
+</html>
